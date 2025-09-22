@@ -449,8 +449,6 @@ class MySQLMCPServer {
   async run(): Promise<void> {
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
-
-    console.error("🚀 Servidor MCP MySQL iniciado! Aguardando conexões...");
   }
 }
 
