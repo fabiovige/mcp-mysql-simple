@@ -1,291 +1,186 @@
-# Servidor MCP MySQL Simples
+# Servidor MCP MySQL Otimizado
 
-Este é um servidor MCP (Model Context Protocol) simples para MySQL, criado do zero para demonstrar os conceitos fundamentais do protocolo MCP da Anthropic.
+Servidor MCP (Model Context Protocol) para MySQL com arquitetura limpa e princípios SOLID.
 
-## 🎯 Objetivo
+## 🆕 Melhorias na v1.1.0
 
-Este projeto foi criado para entender como funciona o protocolo MCP implementando um servidor básico mas funcional que conecta LLMs ao MySQL.
+### ✨ Arquitetura Otimizada
+- **Separação de Responsabilidades**: Classes especializadas para cada função
+- **SOLID Principles**: Código mais maintível e extensível
+- **Clean Architecture**: Estrutura modular e testável
 
-## 📋 Conceitos MCP Implementados
+### 🔒 Segurança Aprimorada
+- **Validação de Queries**: Proteção contra operações perigosas
+- **Sanitização**: Nomes de tabelas validados
+- **SQL Injection Protection**: Parâmetros seguros
+
+### 🚀 Performance e Confiabilidade
+- **Conexão Reutilizada**: Gerenciamento eficiente de recursos
+- **Tratamento de Erros**: Mensagens consistentes e informativas
+- **Shutdown Gracioso**: Encerramento controlado de conexões
+
+## 🏗️ Arquitetura
+
+```
+MySQLMCPServer
+├── DatabaseConfig (Configurações)
+├── DatabaseConnection (Conexão MySQL)
+├── QueryValidator (Validação e Segurança)
+├── ResponseFormatter (Formatação)
+├── ToolsHandler (Ferramentas)
+├── ResourcesHandler (Recursos)
+└── PromptsHandler (Templates)
+```
+
+## 🎯 Conceitos MCP Implementados
 
 ### 1. **Tools (Ferramentas)**
-
-Funções que o LLM pode executar:
-
-- `execute_query`: Executa queries SQL no banco
-- `describe_table`: Descreve a estrutura de uma tabela
+- `execute_query`: Executa queries SQL com validação
+- `describe_table`: Descreve estrutura de tabelas
 
 ### 2. **Resources (Recursos)**
-
-Dados que o LLM pode acessar:
-
-- `mysql://databases`: Lista todos os bancos de dados
-- `mysql://tables`: Lista todas as tabelas do banco atual
-- `mysql://schema`: Schema completo do banco
+- `mysql://databases`: Lista de bancos disponíveis
+- `mysql://tables`: Tabelas do banco atual
+- `mysql://schema`: Schema completo
 
 ### 3. **Prompts (Templates)**
+- `analyze_table`: Análise detalhada de tabela
+- `find_large_tables`: Tabelas com mais registros
+- `database_overview`: Visão geral do banco
 
-Templates pré-definidos para o usuário:
-
-- `analyze_table`: Analisa uma tabela específica
-- `find_large_tables`: Encontra tabelas com mais registros
-- `database_overview`: Visão geral do banco de dados
-
-### 4. **Arquitetura**
-
-![Diagrama de Arquitetura MCP-MySQL](/docs/architecture.png)
-
-## 🚀 Como Usar
+## 🚀 Instalação e Uso
 
 ### 1. Instalar Dependências
-
 ```bash
 npm install
 ```
 
 ### 2. Configurar MySQL
-
-Com base na sua configuração, defina as variáveis de ambiente:
-
-```bash
-export MYSQL_HOST=127.0.0.1
-export MYSQL_PORT=
-export MYSQL_USER=
-export MYSQL_PASS=
-export MYSQL_DB=
+Crie um arquivo `.env`:
+```env
+MYSQL_HOST=localhost
+MYSQL_PORT=3306
+MYSQL_USER=root
+MYSQL_PASSWORD=sua_senha
+MYSQL_DATABASE=seu_banco
 ```
 
-### 3. Compilar o Projeto
-
+### 3. Compilar e Executar
 ```bash
+# Compilar
 npm run build
-```
 
-### 4. Executar o Servidor
-
-```bash
+# Executar
 npm start
-```
 
-### 5. Para Desenvolvimento
-
-```bash
+# Desenvolvimento
 npm run dev
 ```
 
-## 🔧 Configuração do Cliente MCP
+### 4. Testar Conexão
+```bash
+npm run test:connection
+```
 
-Para usar este servidor com Claude Desktop, adicione ao seu `claude_desktop_config.json`:
+## 🔧 Configuração Claude Desktop
+
+Adicione ao `claude_desktop_config.json`:
 
 ```json
 {
   "mcpServers": {
-    "mysql-voompcreators": {
+    "mysql-optimized": {
       "command": "node",
-      "args": ["/home/fabio/mcp-server-fabio/dist/index.js"],
+      "args": ["/caminho/para/dist/index.js"],
       "env": {
-        "MYSQL_HOST": "",
-        "MYSQL_PORT": "",
-        "MYSQL_USER": "",
-        "MYSQL_PASS": "",
-        "MYSQL_DB": ""
+        "MYSQL_HOST": "localhost",
+        "MYSQL_PORT": "3306",
+        "MYSQL_USER": "root",
+        "MYSQL_PASSWORD": "sua_senha",
+        "MYSQL_DATABASE": "seu_banco"
       }
     }
-  }
-}
-```
-
-> **Nota**: O arquivo `claude_desktop_config.json` já está pronto no arquivo `config-example.json`. Você pode copiar o conteúdo para o local correto do Claude Desktop.
-
-## 🏗️ Arquitetura do Código
-
-### Estrutura Principal
-
-```typescript
-class MySQLMCPServer {
-  private server: Server;           // Servidor MCP
-  private connection: Connection;   // Conexão MySQL
-  private config: MySQLConfig;      // Configuração
-
-  constructor() {
-    // Inicializa servidor com capacidades
-    this.server = new Server({...}, {
-      capabilities: {
-        tools: {},      // Suporte a ferramentas
-        resources: {},  // Suporte a recursos
-        prompts: {}     // Suporte a prompts
-      }
-    });
-  }
-}
-```
-
-### Ciclo de Vida MCP
-
-1. **Inicialização**: Cliente conecta e negocia capacidades
-2. **Operação**: Cliente faz requests, servidor responde
-3. **Shutdown**: Conexão é encerrada graciosamente
-
-### Handlers Implementados
-
-```typescript
-// Lista ferramentas disponíveis
-ListToolsRequestSchema -> tools[]
-
-// Executa ferramenta específica
-CallToolRequestSchema -> resultado
-
-// Lista recursos disponíveis
-ListResourcesRequestSchema -> resources[]
-
-// Lê recurso específico
-ReadResourceRequestSchema -> dados
-
-// Lista prompts disponíveis
-ListPromptsRequestSchema -> prompts[]
-
-// Obtém prompt específico
-GetPromptRequestSchema -> template
-```
-
-## 🔍 Exemplos de Uso
-
-### 1. Executar Query SQL
-
-O LLM pode executar:
-
-```sql
-SELECT * FROM usuarios LIMIT 5;
-```
-
-### 2. Descrever Tabela
-
-```sql
-DESCRIBE produtos;
-```
-
-### 3. Acessar Resources
-
-- Listar bancos: `mysql://databases`
-- Listar tabelas: `mysql://tables`
-- Ver schema: `mysql://schema`
-
-### 4. Usar Prompts
-
-- Analisar tabela: `analyze_table(table_name="usuarios")`
-- Encontrar tabelas grandes: `find_large_tables`
-- Visão geral: `database_overview`
-
-## 📡 Protocolo MCP em Ação
-
-### 1. Mensagens JSON-RPC 2.0
-
-```json
-{
-  "jsonrpc": "2.0",
-  "method": "tools/call",
-  "params": {
-    "name": "execute_query",
-    "arguments": {
-      "query": "SELECT COUNT(*) FROM usuarios"
-    }
-  },
-  "id": 1
-}
-```
-
-### 2. Transporte STDIO
-
-O servidor usa `StdioServerTransport` para comunicação via stdin/stdout.
-
-### 3. Capacidades Negociadas
-
-```json
-{
-  "capabilities": {
-    "tools": {},
-    "resources": {},
-    "prompts": {}
   }
 }
 ```
 
 ## 🛡️ Segurança
 
-### Práticas Implementadas:
+### Validações Implementadas:
+- ✅ Bloqueio de `DROP DATABASE/TABLE`
+- ✅ Proteção contra `DELETE ... WHERE 1=1`
+- ✅ Sanitização de nomes de tabelas
+- ✅ Validação de queries vazias
+- ✅ Tratamento seguro de parâmetros
 
-- ✅ Escape de nomes de tabelas/bancos com backticks
-- ✅ Tratamento de erros
-- ✅ Validação de parâmetros
-- ✅ Conexão controlada ao MySQL
+### Práticas de Segurança:
+- 🔒 Conexões controladas
+- 🔒 Logs de erro seguros
+- 🔒 Isolamento de responsabilidades
+- 🔒 Validação de entrada
 
-### Melhorias Futuras:
+## 📊 Exemplo de Uso
 
-- 🔒 Validação de queries SQL (whitelist)
-- 🔒 Rate limiting
-- 🔒 Autenticação/autorização
-- 🔒 Logs de auditoria
+```javascript
+// Executar query segura
+{
+  "name": "execute_query",
+  "arguments": {
+    "query": "SELECT * FROM usuarios LIMIT 5",
+    "database": "meu_banco"
+  }
+}
 
-## 🧪 Testando o Servidor
-
-### 1. Teste Básico
-
-```bash
-echo '{"jsonrpc":"2.0","method":"tools/list","id":1}' | npm start
+// Analisar tabela
+{
+  "name": "describe_table",
+  "arguments": {
+    "table_name": "usuarios"
+  }
+}
 ```
 
-### 2. Teste com MySQL
+## 🔍 Debug e Logs
 
-Certifique-se de ter um MySQL rodando e configurado.
+O servidor fornece logs informativos:
+- ✅ Conexão estabelecida
+- 🔄 Queries executadas
+- ❌ Erros com detalhes
+- 🔚 Shutdown gracioso
 
-## 📚 Aprendizados sobre MCP
+## 📈 Roadmap
 
-### Conceitos-Chave:
+- [ ] Cache de resultados
+- [ ] Métricas de performance  
+- [ ] Pool de conexões
+- [ ] Suporte a transações
+- [ ] Interface web de monitoramento
 
-1. **Servidor MCP**: Expõe capacidades via protocolo padronizado
-2. **Cliente MCP**: Consome capacidades (Ex: Claude Desktop)
-3. **Host**: Aplicação que hospeda o cliente (Ex: Claude)
-4. **JSON-RPC 2.0**: Protocolo de comunicação base
-5. **Capabilities**: Negociação de recursos disponíveis
+## 🤝 Contribuição
 
-### Vantagens do MCP:
+1. Fork o projeto
+2. Crie uma branch (`git checkout -b feature/nova-funcionalidade`)
+3. Commit suas mudanças (`git commit -m 'Adiciona nova funcionalidade'`)
+4. Push para a branch (`git push origin feature/nova-funcionalidade`)
+5. Abra um Pull Request
 
-- 🔌 **Interoperabilidade**: Um servidor, múltiplos clientes
-- 🧩 **Modularidade**: Cada servidor tem responsabilidade específica
-- 🔒 **Segurança**: Isolamento entre servidores
-- 📈 **Escalabilidade**: Fácil adicionar novas capacidades
+## 📝 Changelog
 
-## 🚧 Próximos Passos
+### v1.1.0 (2025-01-XX)
+- ✨ Arquitetura otimizada com SOLID
+- 🔒 Validação e segurança aprimoradas
+- 🚀 Performance melhorada
+- 📚 Documentação expandida
 
-Para expandir este servidor:
+### v1.0.0 (2025-01-XX)
+- 🎉 Versão inicial
+- 🔧 Implementação básica MCP
+- 🗄️ Suporte MySQL completo
 
-1. **Adicionar mais Tools**:
+## 📄 Licença
 
-   - `create_table`
-   - `backup_database`
-   - `optimize_table`
-
-2. **Melhorar Resources**:
-
-   - Índices das tabelas
-   - Estatísticas de performance
-   - Logs de queries
-
-3. **Expandir Prompts**:
-
-   - Templates para relatórios
-   - Queries de otimização
-   - Análises de performance
-
-4. **Implementar Sampling**:
-   - Permitir que o servidor faça requests para o LLM
-
-## 📖 Referências
-
-- [Documentação MCP Oficial](https://spec.modelcontextprotocol.io/)
-- [SDK TypeScript](https://github.com/modelcontextprotocol/typescript-sdk)
-- [Exemplos da Anthropic](https://github.com/modelcontextprotocol/servers)
+MIT License - veja o arquivo [LICENSE](LICENSE) para detalhes.
 
 ---
 
-**Criado com ❤️ para aprender o protocolo MCP da Anthropic**
+**Criado com ❤️ para demonstrar o protocolo MCP da Anthropic**
