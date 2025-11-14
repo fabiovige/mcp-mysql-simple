@@ -1,10 +1,13 @@
-# Servidor MCP MySQL Simples
+# Servidor MCP MySQL Otimizado
 
-Este é um servidor MCP (Model Context Protocol) simples para MySQL, criado do zero para demonstrar os conceitos fundamentais do protocolo MCP da Anthropic.
+Servidor MCP (Model Context Protocol) para MySQL com arquitetura limpa e princípios SOLID.
 
-## 🎯 Objetivo
+## 🆕 Melhorias na v1.1.0
 
-Este projeto foi criado para entender como funciona o protocolo MCP implementando um servidor básico mas funcional que conecta LLMs ao MySQL.
+### ✨ Arquitetura Otimizada
+- **Separação de Responsabilidades**: Classes especializadas para cada função
+- **SOLID Principles**: Código mais maintível e extensível
+- **Clean Architecture**: Estrutura modular e testável
 
 ## ✅ Status do Projeto
 
@@ -14,23 +17,32 @@ Este projeto foi criado para entender como funciona o protocolo MCP implementand
 
 ## 📋 Conceitos MCP Implementados
 
-### 1. **Tools (Ferramentas)**
+### 🚀 Performance e Confiabilidade
+- **Conexão Reutilizada**: Gerenciamento eficiente de recursos
+- **Tratamento de Erros**: Mensagens consistentes e informativas
+- **Shutdown Gracioso**: Encerramento controlado de conexões
 
-Funções que o LLM pode executar:
+## 🏗️ Arquitetura
 
 - `execute_query`: Executa queries SQL no banco
 - `describe_table`: Descreve a estrutura de uma tabela
 - `list_tables`: Lista todas as tabelas do banco
 
+## 🎯 Conceitos MCP Implementados
+
+### 1. **Tools (Ferramentas)**
+- `execute_query`: Executa queries SQL com validação
+- `describe_table`: Descreve estrutura de tabelas
+
 ### 2. **Resources (Recursos)**
-
-Dados que o LLM pode acessar:
-
-- `mysql://databases`: Lista todos os bancos de dados
-- `mysql://tables`: Lista todas as tabelas do banco atual
-- `mysql://schema`: Schema completo do banco
+- `mysql://databases`: Lista de bancos disponíveis
+- `mysql://tables`: Tabelas do banco atual
+- `mysql://schema`: Schema completo
 
 ### 3. **Prompts (Templates)**
+- `analyze_table`: Análise detalhada de tabela
+- `find_large_tables`: Tabelas com mais registros
+- `database_overview`: Visão geral do banco
 
 Templates pré-definidos para o usuário:
 
@@ -45,7 +57,6 @@ Templates pré-definidos para o usuário:
 ## 🚀 Como Usar
 
 ### 1. Instalar Dependências
-
 ```bash
 npm install
 ```
@@ -84,22 +95,22 @@ O servidor MCP utiliza **exclusivamente as variáveis de ambiente** definidas na
 ### 3. Compilar o Projeto
 
 ```bash
+# Compilar
 npm run build
-```
 
-### 4. Executar o Servidor
-
-```bash
+# Executar
 npm start
-```
 
-### 5. Para Desenvolvimento
-
-```bash
+# Desenvolvimento
 npm run dev
 ```
 
-## 🔧 Configuração do Cliente MCP
+### 4. Testar Conexão
+```bash
+npm run test:connection
+```
+
+## 🔧 Configuração Claude Desktop
 
 ### Configuração no Claude Desktop
 
@@ -200,7 +211,8 @@ echo '{"jsonrpc":"2.0","method":"tools/list","id":1}' | node dist/index.js
 
 ### 2. Mensagens JSON-RPC 2.0
 
-```json
+```javascript
+// Executar query segura
 {
   "jsonrpc": "2.0",
   "method": "tools/call",
@@ -292,7 +304,11 @@ mcp-mysql-simple/
 
 ## 📈 Próximos Passos
 
-Para expandir este servidor:
+O servidor fornece logs informativos:
+- ✅ Conexão estabelecida
+- 🔄 Queries executadas
+- ❌ Erros com detalhes
+- 🔚 Shutdown gracioso
 
 1. **Adicionar mais Tools**:
    - `create_table`
@@ -309,8 +325,10 @@ Para expandir este servidor:
    - Queries de otimização
    - Análises de performance
 
-4. **Implementar Sampling**:
-   - Permitir que o servidor faça requests para o LLM
+### v1.0.0 (2025-01-XX)
+- 🎉 Versão inicial
+- 🔧 Implementação básica MCP
+- 🗄️ Suporte MySQL completo
 
 ## 🐛 Solução de Problemas
 
@@ -348,9 +366,7 @@ Para expandir este servidor:
 
 ## 📖 Referências
 
-- [Documentação MCP Oficial](https://spec.modelcontextprotocol.io/)
-- [SDK TypeScript](https://github.com/modelcontextprotocol/typescript-sdk)
-- [Exemplos da Anthropic](https://github.com/modelcontextprotocol/servers)
+MIT License - veja o arquivo [LICENSE](LICENSE) para detalhes.
 
 ---
 

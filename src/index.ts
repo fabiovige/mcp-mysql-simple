@@ -1,14 +1,5 @@
 #!/usr/bin/env node
 
-/**
- * Servidor MCP Simples para MySQL
- *
- * Este servidor demonstra os conceitos fundamentais do protocolo MCP:
- * - Tools: Para executar queries SQL
- * - Resources: Para acessar schemas e metadados
- * - Prompts: Para templates de consultas comuns
- */
-
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
@@ -20,8 +11,10 @@ import {
   ListPromptsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import mysql from "mysql2/promise";
+import { config } from "dotenv";
 
-// Interface para configuração do MySQL
+config();
+
 interface MySQLConfig {
   host: string;
   port: number;
@@ -30,33 +23,24 @@ interface MySQLConfig {
   database?: string;
 }
 
-// Classe principal do servidor MCP MySQL
-class MySQLMCPServer {
-  private server: Server;
-  private connection: mysql.Connection | null = null;
-  private config: MySQLConfig;
+interface ToolResult {
+  content: Array<{
+    type: "text";
+    text: string;
+  }>;
+  isError?: boolean;
+}
 
   constructor() {
     // Carrega configuração do MySQL
     this.config = this.loadMySQLConfig();
 
-    // Inicializa o servidor MCP
-    this.server = new Server(
-      {
-        name: "mysql-mcp-server",
-        version: "1.0.0",
-      },
-      {
-        capabilities: {
-          // Declaramos as capacidades que nosso servidor suporta
-          tools: {}, // Suporte a ferramentas/tools
-          resources: {}, // Suporte a recursos/resources
-          prompts: {}, // Suporte a prompts/templates
-        },
-      }
-    );
+class DatabaseConnection {
+  private connection: mysql.Connection | null = null;
+  private config: MySQLConfig;
 
-    this.setupHandlers();
+  constructor(config: MySQLConfig) {
+    this.config = config;
   }
 
   /**
@@ -94,8 +78,9 @@ class MySQLMCPServer {
       this.connection = await mysql.createConnection(this.config);
       console.error(`✅ Conectado ao MySQL em ${this.config.host}:${this.config.port}`);
     } catch (error) {
-      console.error("❌ Erro ao conectar ao MySQL:", error);
-      throw error;
+      const message = error instanceof Error ? error.message : String(error);
+      console.error("❌ Erro ao conectar ao MySQL:", message);
+      throw new Error(`Falha na conexão: ${message}`);
     }
   }
 
@@ -160,9 +145,9 @@ class MySQLMCPServer {
       };
     });
 
-    // Handler para executar tools
-    this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
-      const { name, arguments: args } = request.params;
+  async useDatabase(database: string): Promise<void> {
+    await this.execute(`USE \`${database}\``);
+  }
 
       try {
         // Conecta ao MySQL se não estiver conectado
@@ -177,11 +162,20 @@ class MySQLMCPServer {
               args?.database as string
             );
 
-          case "describe_table":
-            return await this.describeTable(
-              args?.table_name as string,
-              args?.database as string
-            );
+class QueryValidator {
+  private static readonly DANGEROUS_PATTERNS = [
+    /DROP\s+DATABASE/i,
+    /DROP\s+TABLE/i,
+    /DELETE\s+FROM.*WHERE.*1\s*=\s*1/i,
+    /TRUNCATE/i,
+  ];
+
+  static validate(query: string): void {
+    const normalizedQuery = query.trim();
+    
+    if (!normalizedQuery) {
+      throw new Error("Query não pode estar vazia");
+    }
 
           case "list_tables":
             return await this.listTables(args?.database as string);
@@ -202,39 +196,23 @@ class MySQLMCPServer {
           ],
         };
       }
-    });
+    }
+  }
 
-    // 2. RESOURCES - Dados que o LLM pode acessar
-    this.server.setRequestHandler(ListResourcesRequestSchema, async () => {
-      return {
-        resources: [
-          {
-            uri: "mysql://databases",
-            name: "Lista de Bancos de Dados",
-            description: "Lista todos os bancos de dados disponíveis",
-            mimeType: "application/json",
-          },
-          {
-            uri: "mysql://tables",
-            name: "Lista de Tabelas",
-            description: "Lista todas as tabelas do banco atual",
-            mimeType: "application/json",
-          },
-          {
-            uri: "mysql://schema",
-            name: "Schema do Banco",
-            description: "Schema completo do banco de dados atual",
-            mimeType: "application/json",
-          },
-        ],
-      };
-    });
+  static sanitizeTableName(tableName: string): string {
+    if (!/^[a-zA-Z0-9_]+$/.test(tableName)) {
+      throw new Error("Nome de tabela inválido");
+    }
+    return tableName;
+  }
+}
 
-    // Handler para ler resources
-    this.server.setRequestHandler(
-      ReadResourceRequestSchema,
-      async (request) => {
-        const { uri } = request.params;
+class ResponseFormatter {
+  static success(content: string) {
+    return {
+      content: [{ type: "text", text: content }]
+    };
+  }
 
         try {
           if (!this.connection) {
@@ -270,6 +248,7 @@ class MySQLMCPServer {
         }
       }
     );
+  }
 
     // 3. PROMPTS - Templates pré-definidos
     this.server.setRequestHandler(ListPromptsRequestSchema, async () => {
@@ -304,80 +283,41 @@ class MySQLMCPServer {
     this.server.setRequestHandler(GetPromptRequestSchema, async (request) => {
       const { name, arguments: args } = request.params;
 
-      switch (name) {
-        case "analyze_table":
-          const tableName = args?.table_name as string;
-          if (!tableName) {
-            throw new Error("table_name é obrigatório");
-          }
-          return {
-            description: `Análise da tabela ${tableName}`,
-            messages: [
-              {
-                role: "user",
-                content: {
-                  type: "text",
-                  text: `Por favor, analise a tabela "${tableName}". 
-                  
-                  1. Primeiro, descreva a estrutura da tabela
-                  2. Mostre alguns dados de exemplo 
-                  3. Calcule estatísticas básicas (contagem de registros)
-                  4. Identifique possíveis problemas ou oportunidades de otimização`,
-                },
-              },
-            ],
-          };
+class ToolsHandler {
+  constructor(private db: DatabaseConnection) {}
 
-        case "find_large_tables":
-          return {
-            description: "Encontrar tabelas com mais registros",
-            messages: [
-              {
-                role: "user",
-                content: {
-                  type: "text",
-                  text: `Liste todas as tabelas do banco atual e me mostre:
-                  
-                  1. O número de registros de cada tabela
-                  2. Ordene por quantidade de registros (maior para menor)
-                  3. Identifique as 5 maiores tabelas
-                  4. Sugira estratégias de otimização se necessário`,
-                },
-              },
-            ],
-          };
-
-        case "database_overview":
-          return {
-            description: "Visão geral do banco de dados",
-            messages: [
-              {
-                role: "user",
-                content: {
-                  type: "text",
-                  text: `Me dê uma visão geral completa do banco de dados:
-                  
-                  1. Liste todos os bancos disponíveis
-                  2. Para o banco atual, mostre todas as tabelas
-                  3. Identifique relacionamentos entre tabelas (foreign keys)
-                  4. Sugira melhorias na estrutura se aplicável`,
-                },
-              },
-            ],
-          };
-
-        default:
-          throw new Error(`Prompt não encontrado: ${name}`);
+  async executeQuery(query: string, database?: string) {
+    try {
+      QueryValidator.validate(query);
+      
+      if (database) {
+        await this.db.useDatabase(database);
       }
-    });
+
+      const [rows] = await this.db.execute(query);
+      return ResponseFormatter.queryResult(query, rows);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return ResponseFormatter.error(message);
+    }
   }
 
-  // Métodos auxiliares para executar operações MySQL
+  async describeTable(tableName: string, database?: string) {
+    try {
+      const sanitizedName = QueryValidator.sanitizeTableName(tableName);
+      
+      if (database) {
+        await this.db.useDatabase(database);
+      }
 
-  private async executeQuery(query: string, database?: string): Promise<any> {
-    if (!this.connection) {
-      throw new Error("Não conectado ao MySQL");
+      const [rows] = await this.db.execute(`DESCRIBE \`${sanitizedName}\``);
+      return ResponseFormatter.tableStructure(sanitizedName, rows);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return ResponseFormatter.error(message);
     }
+  }
+}
 
     try {
       // Muda para o banco específico se fornecido
@@ -405,13 +345,9 @@ class MySQLMCPServer {
     }
   }
 
-  private async describeTable(
-    tableName: string,
-    database?: string
-  ): Promise<any> {
-    if (!this.connection) {
-      throw new Error("Não conectado ao MySQL");
-    }
+  async getSchema(): Promise<any> {
+    const [tables] = await this.db.execute("SHOW TABLES");
+    const schema: any = { tables: [] };
 
     try {
       if (database) {
@@ -468,10 +404,69 @@ class MySQLMCPServer {
     }
   }
 
-  private async getDatabases(): Promise<any> {
-    if (!this.connection) {
-      throw new Error("Não conectado ao MySQL");
+  static getPrompt(name: string, args?: any) {
+    switch (name) {
+      case "analyze_table": {
+        const tableName = args?.table_name as string;
+        if (!tableName) {
+          throw new Error("table_name é obrigatório");
+        }
+        return {
+          description: `Análise da tabela ${tableName}`,
+          messages: [{
+            role: "user" as const,
+            content: {
+              type: "text" as const,
+              text: `Analise a tabela "${tableName}":
+              
+1. Descreva a estrutura da tabela
+2. Mostre alguns dados de exemplo 
+3. Calcule estatísticas básicas (contagem de registros)
+4. Identifique possíveis problemas ou oportunidades de otimização`,
+            },
+          }],
+        };
+      }
+
+      case "find_large_tables":
+        return {
+          description: "Encontrar tabelas com mais registros",
+          messages: [{
+            role: "user" as const,
+            content: {
+              type: "text" as const,
+              text: `Liste todas as tabelas do banco atual:
+              
+1. Número de registros de cada tabela
+2. Ordene por quantidade (maior para menor)
+3. Identifique as 5 maiores tabelas
+4. Sugira estratégias de otimização se necessário`,
+            },
+          }],
+        };
+
+      case "database_overview":
+        return {
+          description: "Visão geral do banco de dados",
+          messages: [{
+            role: "user" as const,
+            content: {
+              type: "text" as const,
+              text: `Visão geral completa do banco:
+              
+1. Liste todos os bancos disponíveis
+2. Para o banco atual, mostre todas as tabelas
+3. Identifique relacionamentos entre tabelas
+4. Sugira melhorias na estrutura`,
+            },
+          }],
+        };
+
+      default:
+        throw new Error(`Prompt não encontrado: ${name}`);
     }
+  }
+}
 
     try {
       const [rows] = await this.connection.execute("SHOW DATABASES");
@@ -491,10 +486,11 @@ class MySQLMCPServer {
     }
   }
 
-  private async getTables(): Promise<any> {
-    if (!this.connection) {
-      throw new Error("Não conectado ao MySQL");
+  private async ensureConnection(): Promise<void> {
+    if (!this.db.isConnected()) {
+      await this.db.connect();
     }
+  }
 
     try {
       const [rows] = await this.connection.execute("SHOW TABLES");
@@ -514,10 +510,8 @@ class MySQLMCPServer {
     }
   }
 
-  private async getSchema(): Promise<any> {
-    if (!this.connection) {
-      throw new Error("Não conectado ao MySQL");
-    }
+    this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
+      const { name, arguments: args } = request.params;
 
     try {
       // Obtém informações do schema
@@ -550,7 +544,6 @@ class MySQLMCPServer {
     }
   }
 
-  // Inicia o servidor
   async run(): Promise<void> {
     try {
       const transport = new StdioServerTransport();
@@ -568,6 +561,10 @@ class MySQLMCPServer {
       await this.connection.end();
       console.error("🔌 Conexão MySQL fechada");
     }
+  }
+
+  async shutdown(): Promise<void> {
+    await this.db.close();
   }
 }
 
