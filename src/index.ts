@@ -87,13 +87,8 @@ class DatabaseConnection {
   }
 }
 
-class QueryValidator {
-  private static readonly DANGEROUS_PATTERNS = [
-    /DROP\s+DATABASE/i,
-    /DROP\s+TABLE/i,
-    /DELETE\s+FROM.*WHERE.*1\s*=\s*1/i,
-    /TRUNCATE/i,
-  ];
+export class QueryValidator {
+  private static readonly ALLOWED_PREFIXES = ['SELECT', 'SHOW', 'DESCRIBE', 'DESC', 'EXPLAIN', 'USE'];
 
   static validate(query: string): void {
     const normalizedQuery = query.trim();
@@ -102,10 +97,10 @@ class QueryValidator {
       throw new Error("Query não pode estar vazia");
     }
 
-    for (const pattern of this.DANGEROUS_PATTERNS) {
-      if (pattern.test(normalizedQuery)) {
-        throw new Error("Query contém operações potencialmente perigosas");
-      }
+    const firstKeyword = normalizedQuery.split(/\s+/)[0].toUpperCase();
+
+    if (!this.ALLOWED_PREFIXES.includes(firstKeyword)) {
+      throw new Error("Apenas operações de leitura são permitidas (SELECT, SHOW, DESCRIBE, EXPLAIN, USE)");
     }
   }
 
