@@ -68,7 +68,13 @@ class DatabaseConnection {
     if (!this.connection) {
       throw new Error("Conexão não estabelecida");
     }
-    return this.connection.execute(query, params);
+    // Usa query() (protocolo texto) quando não há parâmetros. O protocolo de
+    // prepared statement do MySQL não suporta comandos como USE e alguns SHOW,
+    // e sem params não há benefício em usar execute().
+    if (params && params.length > 0) {
+      return this.connection.execute(query, params);
+    }
+    return this.connection.query(query);
   }
 
   async useDatabase(database: string): Promise<void> {
