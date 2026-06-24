@@ -53,9 +53,19 @@ MYSQL_PORT=3306
 MYSQL_USER=root
 MYSQL_PASS=your_password
 MYSQL_DB=your_database
+QUERY_DEFAULT_LIMIT=100  # default LIMIT applied to SELECT queries without one
 ```
 
 The server supports connection-time database switching via tool parameters.
+
+## Query Safety Rules
+
+**LIMIT obrigatório em SELECT:** Toda query SELECT que não tiver cláusula LIMIT recebe automaticamente `LIMIT 100` antes de ser executada. Isso evita travamentos em tabelas grandes (ex: tabela `webhook` com vários GBs de dados).
+
+- O padrão é 100 linhas, configurável via `QUERY_DEFAULT_LIMIT` no `.env`
+- Queries que já tiverem `LIMIT` explícito não são alteradas
+- A query final executada (com LIMIT aplicado) é sempre exibida no resultado
+- Implementado em `QueryValidator.enforceSelectLimit()` (`src/index.ts`)
 
 ## Protocol Details
 
