@@ -95,10 +95,11 @@ class DatabaseConnection {
 
 export class QueryValidator {
   private static readonly ALLOWED_PREFIXES = ['SELECT', 'SHOW', 'DESCRIBE', 'DESC', 'EXPLAIN', 'USE'];
+  static readonly DEFAULT_LIMIT = parseInt(process.env.QUERY_DEFAULT_LIMIT || '100');
 
   static validate(query: string): void {
     const normalizedQuery = query.trim();
-    
+
     if (!normalizedQuery) {
       throw new Error("Query não pode estar vazia");
     }
@@ -108,6 +109,18 @@ export class QueryValidator {
     if (!this.ALLOWED_PREFIXES.includes(firstKeyword)) {
       throw new Error("Apenas operações de leitura são permitidas (SELECT, SHOW, DESCRIBE, EXPLAIN, USE)");
     }
+  }
+
+  static enforceSelectLimit(query: string): string {
+    const trimmed = query.trim();
+    if (!/^SELECT\b/i.test(trimmed)) {
+      return query;
+    }
+    if (/\bLIMIT\b/i.test(trimmed)) {
+      return query;
+    }
+    // Remove trailing semicolon before appending LIMIT
+    return `${trimmed.replace(/;+$/, '')} LIMIT ${this.DEFAULT_LIMIT}`;
   }
 
   static sanitizeTableName(tableName: string): string {
@@ -150,13 +163,15 @@ class ToolsHandler {
   async executeQuery(query: string, database?: string) {
     try {
       QueryValidator.validate(query);
-      
+
+      const finalQuery = QueryValidator.enforceSelectLimit(query);
+
       if (database) {
         await this.db.useDatabase(database);
       }
 
-      const [rows] = await this.db.execute(query);
-      return ResponseFormatter.queryResult(query, rows);
+      const [rows] = await this.db.execute(finalQuery);
+      return ResponseFormatter.queryResult(finalQuery, rows);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       return ResponseFormatter.error(message);
@@ -359,13 +374,13 @@ export class MySQLMCPServer {
       tools: [
         {
           name: "execute_query",
-          description: "Executa uma query SQL no banco MySQL",
+          description: `Executa uma query SQL de leitura no banco MySQL. Queries SELECT sem LIMIT recebem automaticamente LIMIT ${QueryValidator.DEFAULT_LIMIT} para evitar retornos excessivos. Use LIMIT explícito na query para sobrescrever.`,
           inputSchema: {
             type: "object",
             properties: {
               query: {
                 type: "string",
-                description: "A query SQL para executar",
+                description: "A query SQL para executar (SELECT, SHOW, DESCRIBE, EXPLAIN). Se for SELECT sem LIMIT, um LIMIT padrão será aplicado automaticamente.",
               },
               database: {
                 type: "string",
